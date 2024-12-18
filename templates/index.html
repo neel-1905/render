@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Reach Predictor</title>
+</head>
+
+<body>
+    <h1>Instagram Reach Predictor</h1>
+    <form action="/predict" method="post" enctype="multipart/form-data">
+        <label for="file">Upload an Excel file:</label>
+        <input type="file" name="file" id="file" accept=".xlsx"><br><br>
+        <button type="submit">Predict</button>
+    </form>
+    <div id="result"></div>
+</body>
+
+</html>
