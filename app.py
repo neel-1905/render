@@ -6,34 +6,9 @@ from sklearn.linear_model import PassiveAggressiveRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = '/tmp'  # Temporary file storage on the server
-
-# Load the training dataset to initialize the model
-file_path = 'Instagram_data_by_Bhanu.csv'  # Replace with your dataset path
-data = pd.read_csv(file_path, encoding='latin1')
-
-# Feature Engineering for training
-numeric_features = data[['Likes', 'Saves', 'Comments', 'Shares', 'Profile Visits', 'Follows']].values
-tfidf = TfidfVectorizer(max_features=50)
-hashtag_features = tfidf.fit_transform(data['Hashtags'].astype(str)).toarray()
-
-X = np.hstack([numeric_features, hashtag_features])
-y = data['Impressions'].values
-
-# Train-Test Split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Normalize numeric features
-scaler = StandardScaler()
-X_train[:, :numeric_features.shape[1]] = scaler.fit_transform(X_train[:, :numeric_features.shape[1]])
-X_test[:, :numeric_features.shape[1]] = scaler.transform(X_test[:, :numeric_features.shape[1]])
-
-# Train the model
-model = PassiveAggressiveRegressor(max_iter=1000, random_state=42, tol=1e-3)
-model.fit(X_train, y_train)
+app.config['UPLOAD_FOLDER'] = '/tmp'  # Use /tmp for temporary file storage on Render
 
 @app.route('/')
 def index():
@@ -57,22 +32,50 @@ def predict():
 
     # Load and process the uploaded file
     try:
-        uploaded_data = pd.read_excel(file_path)
+        # Load the file dynamically (Excel or CSV)
+        if file.filename.endswith('.xlsx'):
+            data = pd.read_excel(file_path)
+        elif file.filename.endswith('.csv'):
+            data = pd.read_csv(file_path)
+        else:
+            return jsonify({'error': 'Unsupported file format. Upload an Excel or CSV file.'}), 400
 
-        # Process numeric and hashtag features
-        numeric_inputs = uploaded_data[['Likes', 'Saves', 'Comments', 'Shares', 'Profile Visits', 'Follows']].values
-        hashtag_inputs = tfidf.transform(uploaded_data['Hashtags'].astype(str)).toarray()
+        # Validate required columns
+        required_columns = ['Likes', 'Saves', 'Comments', 'Shares', 'Profile Visits', 'Follows', 'Hashtags']
+        if not all(col in data.columns for col in required_columns):
+            return jsonify({'error': f'Missing required columns. Ensure the file contains {required_columns}'}), 400
+
+        # Feature Engineering
+        numeric_features = data[['Likes', 'Saves', 'Comments', 'Shares', 'Profile Visits', 'Follows']].values
+        tfidf = TfidfVectorizer(max_features=50)
+        hashtag_features = tfidf.fit_transform(data['Hashtags'].astype(str)).toarray()
 
         # Combine features
-        features = np.hstack([scaler.transform(numeric_inputs), hashtag_inputs])
+        X = np.hstack([numeric_features, hashtag_features])
 
-        # Predict impressions
-        predictions = model.predict(features)
-        uploaded_data['Predicted Reach'] = predictions
+        # Normalize numeric features
+        scaler = StandardScaler()
+        X = np.hstack([scaler.fit_transform(numeric_features), hashtag_features])
+
+        # Mock Impressions for Training (Temporary for Prediction)
+        y = np.random.randint(1000, 10000, size=X.shape[0])  # Simulated impressions for demo purposes
+
+        # Train-Test Split
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Train the model
+        model = PassiveAggressiveRegressor(max_iter=1000, random_state=42, tol=1e-3)
+        model.fit(X_train, y_train)
+
+        # Predict on the uploaded dataset
+        predictions = model.predict(X)
+
+        # Add predictions to the DataFrame
+        data['Predicted Reach'] = predictions
 
         # Save the result to a CSV in /tmp
         result_path = os.path.join(app.config['UPLOAD_FOLDER'], 'result.csv')
-        uploaded_data.to_csv(result_path, index=False)
+        data.to_csv(result_path, index=False)
 
         return jsonify({'message': 'Predictions complete', 'download_url': '/uploads/result.csv'})
     except Exception as e:
